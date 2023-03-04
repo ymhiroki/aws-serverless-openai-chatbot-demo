@@ -1,18 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 
 export interface StaticContentStackProps extends cdk.StackProps {
+  // readonly restApi: apigateway.IRestApi;
 }
 
 export class StaticContentStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: StaticContentStackProps) {
     super(scope, id, props);
+
+    // const {restApi} = props;
 
     const logBucket = new s3.Bucket(this, 'LogBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
@@ -22,12 +26,18 @@ export class StaticContentStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
+    const corsRule: s3.CorsRule = {
+      allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+      allowedOrigins: [`*`],
+      allowedHeaders: ['*'],
+    };
     const deploymentBucket = new s3.Bucket(this, 'DeploymentBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       serverAccessLogsBucket: logBucket,
       serverAccessLogsPrefix: 'deployment-bucket-logs',
+      cors: [corsRule],
     });
 
     // Static site hosting with CF & S3 Bucket: https://prototyping-blog.com/blog/cdk-static-website
@@ -49,8 +59,6 @@ export class StaticContentStack extends cdk.Stack {
       defaultBehavior: {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        // viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
         origin: new S3Origin(deploymentBucket, {
           originAccessIdentity,
         }),
@@ -59,10 +67,14 @@ export class StaticContentStack extends cdk.Stack {
     })
 
     new BucketDeployment(this, 'Deployment', {
-      sources: [Source.asset('../build/')],
+      sources: [Source.asset('../client/build')],
       destinationBucket: deploymentBucket,
       distribution: distribution,
       distributionPaths: ['/*']
+    });
+
+    new CfnOutput(this, 'DistributionDomainName', {
+      value: distribution.distributionDomainName,
     });
   }
 }

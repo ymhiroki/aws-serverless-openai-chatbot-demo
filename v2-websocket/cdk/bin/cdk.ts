@@ -13,5 +13,5 @@ new ApiGatewayStack(app, 'ApiGatewayStack', {
   openaiApiKey,
 });
 
-// new StaticContentStack(app, 'StaticContentStack', {
-// });
+new StaticContentStack(app, 'StaticContentStack', {
+});
